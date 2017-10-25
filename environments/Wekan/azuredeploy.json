@@ -1,0 +1,116 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "adminUsername": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Database administrator login name"
+            }
+        },
+        "adminPassword": {
+            "type": "securestring",
+            "minLength": 8,
+            "metadata": {
+                "description": "Database administrator password"
+            }
+        },
+        "servicePlan": {
+            "type": "string",
+            "allowedValues": [
+                "S1",
+                "S2",
+                "S3"
+            ],
+            "defaultValue": "S2",
+            "metadata": {
+                "description": "Tier and size of the Service Plan"
+            }
+        }
+    },
+    "variables": {
+        "siteName": "[toLower(concat('wekan-', uniqueString(resourceGroup().id)))]",
+        "databaseName": "[concat(variables('siteName'), '-db')]",
+        "hostingPlanName": "[concat(variables('siteName'), '-hp')]",
+        "servicePlanTier": "Standard",
+        "servicePlanSku": "[parameters('servicePlan')]"
+    },
+    "resources": [
+        {
+            "apiVersion": "2015-04-08",
+            "type": "Microsoft.DocumentDB/databaseAccounts",
+            "kind": "MongoDB",
+            "name": "[variables('databaseName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "databaseAccountOfferType": "Standard",
+                "name": "[variables('databaseName')]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "name": "[variables('siteName')]",
+            "apiVersion": "2016-03-01",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[variables('hostingPlanName')]",
+                "[variables('databaseName')]"
+            ],
+            "properties": {
+                "siteConfig": {
+                    "linuxFxVersion": "DOCKER|wekanteam/wekan"
+                },
+                "name": "[variables('siteName')]",
+                "serverFarmId": "[variables('hostingPlanName')]",
+                "hostingEnvironment": ""
+            },
+            "resources": [
+                {
+                    "name": "appsettings",
+                    "type": "config",
+                    "apiVersion": "2015-08-01",
+                    "comments": "This are the generated settings for the Sonar jdbc connectionstring",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Web/sites', variables('siteName'))]",
+                        "[resourceId('Microsoft.DocumentDB/databaseAccounts', variables('databaseName'))]"
+                    ],
+                    "properties": {
+                        "MONGO_URL": "[listConnectionStrings(resourceId('Microsoft.DocumentDB/databaseAccounts', variables('databaseName')), '2015-04-08').connectionStrings[0].connectionString]",
+                        "ROOT_URL": "[concat('https://', reference(resourceId('Microsoft.Web/sites', variables('siteName'))).defaultHostName)]",
+                        "MAIL_URL": "",
+                        "MAIL_FROM": "[concat('Wekan <wekan@', toLower(reference(resourceId('Microsoft.Web/sites', variables('siteName'))).defaultHostName),'>')]"
+                    }
+                }
+            ]
+        },
+        {
+            "apiVersion": "2016-09-01",
+            "name": "[variables('hostingPlanName')]",
+            "type": "Microsoft.Web/serverfarms",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "name": "[variables('hostingPlanName')]",
+                "workerSizeId": "1",
+                "reserved": true,
+                "numberOfWorkers": "1",
+                "hostingEnvironment": ""
+            },
+            "sku": {
+                "Tier": "[variables('servicePlanTier')]",
+                "Name": "[variables('servicePlanSku')]"
+            },
+            "kind": "linux"
+        }
+    ],
+    "outputs": {
+        "rootUrl": {
+            "type": "string",
+            "value": "[concat('https://', reference(resourceId('Microsoft.Web/sites', variables('siteName'))).defaultHostName)]"
+        },
+        "connectionString": {
+            "type":  "string",
+            "value": "[listConnectionStrings(resourceId('Microsoft.DocumentDB/databaseAccounts', variables('databaseName')), '2015-04-08').connectionStrings[0].connectionString]"
+        }
+    }
+}
