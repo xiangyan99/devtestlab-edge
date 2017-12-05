@@ -58,6 +58,24 @@
                     }
                 ]
             }
-        }
+        },
+        {
+            "apiVersion": "2016-06-01",
+            "type": "Microsoft.Network/virtualNetworks/virtualNetworkPeerings",
+            "name": "[variables('gatewayPeeringName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks', variables('gatewayVirtualNetworkName'))]"
+            ],
+            "properties": {
+              "allowVirtualNetworkAccess": true,
+              "allowForwardedTraffic": true,
+              "allowGatewayTransit": true,
+              "useRemoteGateways": true,
+              "remoteVirtualNetwork": {
+                "id": "[variables('labVirtualNetworkId')]"
+              }
+            }
+          }
     ]
 }
