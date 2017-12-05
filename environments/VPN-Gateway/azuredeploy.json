@@ -8,17 +8,10 @@
         "labVirtualNetworkName": {
             "type": "string"
         },
-        "clientAddressPool": {
-            "type": "string"
-        },
-        "clientRootCertName": {
-            "type": "string"
-        },
-        "clientRootCertData": {
-            "type": "string"
-        },
-        "revokedClientThumbprints": {
-            "type": "string"
+        "labPeeringNetworkIndex": {
+            "type": "int",
+            "minValue": 100,
+            "maxValue": 200
         },
         "_artifactsLocation": {
             "type": "string",
@@ -37,99 +30,33 @@
     },
     "variables": {
         "resourcePrefix": "[concat('gw-', uniqueString(resourceGroup().id))]",
-        "gatewaySku": "Basic",
-        "gatewayName": "[variables('resourcePrefix')]",
-        "gatewayPublicIPName": "[concat(variables('resourcePrefix'), '-ip')]",
-        "labVirtualNetworkId": "[resourceId(subscription().subscriptionId, parameters('labResourceGroupName'), 'Microsoft.Network/virtualNetworks',parameters('labVirtualNetworkName'))]",
-        "labGatewaySubnetRef": "[concat(variables('labVirtualNetworkId'),'/subnets/','GatewaySubnet')]",
-        "revokedClientThumbprints": "[split(parameters('revokedClientThumbprints'), ',')]"
+        "labVirtualNetworkId": "[resourceId(parameters('labResourceGroupName'), 'Microsoft.Network/virtualNetworks', parameters('labVirtualNetworkName'))]",
+        "gatewayVirtualNetworkName": "[concat(variables('resourcePrefix'), '-vnet')]",
+        "gatewayVirtualNetworkPrefix": "10.75.0.0/16",
+        "gatewaySubnetName": "GatewaySubnet",
+        "gatewaySubnetPrefix": "10.75.250.0/24",
+        "gatewayPeeringName": "[concat(variables('gatewayVirtualNetworkName'), '/peering-to-remote-vnet')]"
     },
     "resources": [
         {
-            "name": "[concat(deployment().name, '-Internal')]",
-            "type": "Microsoft.Resources/deployments",
-            "apiVersion": "2017-05-10",
-            "resourceGroup": "[parameters('labResourceGroupName')]",
+            "apiVersion": "2015-06-15",
+            "type": "Microsoft.Network/virtualNetworks",
+            "name": "[variables('gatewayVirtualNetworkName')]",
+            "location": "[resourceGroup().location]",
             "properties": {
-                "mode": "Incremental",
-                "template": {
-                    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
-                    "contentVersion": "1.0.0.0",
-                    "parameters": { },
-                    "variables": { },
-                    "resources": [
-                        {
-                            "apiVersion": "2015-06-15",
-                            "type": "Microsoft.Network/publicIPAddresses",
-                            "name": "[variables('gatewayPublicIPName')]",
-                            "location": "[resourceGroup().location]",
-                            "properties": {
-                                "publicIPAllocationMethod": "Dynamic"
-                            }
-                        },
-                        {
-                            "apiVersion": "2015-06-15",
-                            "type": "Microsoft.Network/virtualNetworkGateways",
-                            "name": "[variables('gatewayName')]",
-                            "location": "[resourceGroup().location]",
-                            "dependsOn": [
-                                "[concat('Microsoft.Network/publicIPAddresses/', variables('gatewayPublicIPName'))]"
-                            ],
-                            "properties": {
-                                "ipConfigurations": [
-                                    {
-                                        "properties": {
-                                            "privateIPAllocationMethod": "Dynamic",
-                                            "subnet": {
-                                                "id": "[variables('labGatewaySubnetRef')]"
-                                            },
-                                            "publicIPAddress": {
-                                                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('gatewayPublicIPName'))]"
-                                            }
-                                        },
-                                        "name": "vnetGatewayConfig"
-                                    }
-                                ],
-                                "sku": {
-                                    "name": "[variables('gatewaySku')]",
-                                    "tier": "[variables('gatewaySku')]"
-                                },
-                                "gatewayType": "Vpn",
-                                "vpnType": "RouteBased",
-                                "enableBgp": "false",
-                                "vpnClientConfiguration": {
-                                    "vpnClientAddressPool": {
-                                        "addressPrefixes": [
-                                            "[parameters('clientAddressPool')]"
-                                        ]
-                                    },
-                                    "vpnClientRootCertificates": [
-                                        {
-                                            "name": "[parameters('clientRootCertName')]",
-                                            "properties": {
-                                                "PublicCertData": "[parameters('clientRootCertData')]"
-                                            }
-                                        }
-                                    ],     
-                                    "copy": [
-                                        {
-                                            "name": "vpnClientRevokedCertificates",
-                                            "count": "[length(variables('revokedClientThumbprints'))]",
-                                            "input": {
-                                                "name": "[concat('subnet-', copyIndex('vpnClientRevokedCertificates'))]",
-                                                "properties": {
-                                                    "Thumbprint": "[variables('revokedClientThumbprints')[copyIndex('vpnClientRevokedCertificates')]]"
-                                                }
-                                            }
-                                        }
-                                    ]               
-                                }
-                            }
-                        }
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[variables('gatewayVirtualNetworkPrefix')]"
                     ]
                 },
-                "parameters":{ 
-                }
+                "subnets": [
+                    {
+                        "name": "[variables('gatewaySubnetName')]",
+                        "properties": {
+                            "addressPrefix": "[variables('gatewaySubnetPrefix')]"
+                        }
+                    }
+                ]
             }
         }
     ]
