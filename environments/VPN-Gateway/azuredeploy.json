@@ -32,9 +32,9 @@
         "resourcePrefix": "[concat('gw-', uniqueString(resourceGroup().id))]",
         "labVirtualNetworkId": "[resourceId(parameters('labResourceGroupName'), 'Microsoft.Network/virtualNetworks', parameters('labVirtualNetworkName'))]",
         "gatewayVirtualNetworkName": "[concat(variables('resourcePrefix'), '-vnet')]",
-        "gatewayVirtualNetworkPrefix": "10.75.0.0/16",
+        "gatewayVirtualNetworkPrefix": "192.168.240.0/20",
         "gatewaySubnetName": "GatewaySubnet",
-        "gatewaySubnetPrefix": "10.75.250.0/24",
+        "gatewaySubnetPrefix": "192.168.250.0/24",
         "gatewayPeeringName": "[concat(variables('gatewayVirtualNetworkName'), '/peering-to-remote-vnet')]"
     },
     "resources": [

@@ -54,12 +54,10 @@
     "variables": {
         "labVirtualNetworkId": "[resourceId('Microsoft.Network/virtualNetworks', variables('labVirtualNetworkName'))]",
         "labVirtualNetworkName": "[concat(parameters('labName'), 'VNet')]",
-        "labVirtualNetworkPrefix": "10.75.0.0/16",
+        "labVirtualNetworkPrefix": "192.168.0.0/20",
         "labSubnetId":"[concat(variables('labVirtualNetworkId'), '/subnets/', variables('labSubnetName'))]",
         "labSubnetName":"LabSubnet",
-        "labSubnetPrefix": "10.75.0.0/20",
-        "gatewaySubnetName": "GatewaySubnet",
-        "gatewaySubnetPrefix": "10.75.250.0/24",
+        "labSubnetPrefix": "192.168.0.0/20",
         "artifactRepositoryName": "[concat('privaterepo', uniqueString(resourceGroup().id))]"
     },
     "resources": [
@@ -79,12 +77,6 @@
               "name": "[variables('labSubnetName')]",
               "properties": {
                 "addressPrefix": "[variables('labSubnetPrefix')]"
-              }
-            },
-            {
-              "name": "[variables('gatewaySubnetName')]",
-              "properties": {
-                "addressPrefix": "[variables('gatewaySubnetPrefix')]"
               }
             }
           ]
