@@ -6,7 +6,8 @@
             "type": "string"
         },
         "labVirtualNetworkName": {
-            "type": "string"
+            "type": "string",
+            "defaultValue": "[concat(parameters('labResourceGroupName'), 'VNet')]"
         },
         "vpnClientAddressPrefix": {
             "type": "string",
@@ -37,11 +38,12 @@
         "resourcePrefix": "[concat('gw-', uniqueString(resourceGroup().id))]",
         "labVirtualNetworkId": "[resourceId(parameters('labResourceGroupName'), 'Microsoft.Network/virtualNetworks', parameters('labVirtualNetworkName'))]",
         "gatewayName": "[variables('resourcePrefix')]",
+        "gatewayVirtualNetworkId": "[resourceId('Microsoft.Network/virtualNetworks', variables('gatewayVirtualNetworkName'))]",
         "gatewayVirtualNetworkName": "[concat(variables('resourcePrefix'), '-vnet')]",
         "gatewayVirtualNetworkPrefix": "192.168.240.0/20",
         "gatewaySubnetName": "GatewaySubnet",
         "gatewaySubnetPrefix": "192.168.250.0/24",
-        "gatewaySubnetRef": "[concat(variables('labVirtualNetworkId'), '/subnets/', variables('gatewaySubnetName'))]",
+        "gatewaySubnetRef": "[concat(variables('gatewayVirtualNetworkId'), '/subnets/', variables('gatewaySubnetName'))]",
         "gatewayPeeringName": "peering-to-lab-vnet",
         "gatewayPublicIpName": "[concat(variables('resourcePrefix'), '-pip')]"
     },
