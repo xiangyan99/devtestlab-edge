@@ -8,10 +8,15 @@
         "labVirtualNetworkName": {
             "type": "string"
         },
-        "labPeeringNetworkIndex": {
-            "type": "int",
-            "minValue": 100,
-            "maxValue": 200
+        "vpnClientAddressPrefix": {
+            "type": "string",
+            "defaultValue": "192.168.0.0/24"
+        },
+        "vpnClientRootCertName": {
+            "type": "string"
+        },
+        "vpnClientRootCertData": {
+            "type": "string"
         },
         "_artifactsLocation": {
             "type": "string",
@@ -31,11 +36,14 @@
     "variables": {
         "resourcePrefix": "[concat('gw-', uniqueString(resourceGroup().id))]",
         "labVirtualNetworkId": "[resourceId(parameters('labResourceGroupName'), 'Microsoft.Network/virtualNetworks', parameters('labVirtualNetworkName'))]",
+        "gatewayName": "[variables('resourcePrefix')]",
         "gatewayVirtualNetworkName": "[concat(variables('resourcePrefix'), '-vnet')]",
         "gatewayVirtualNetworkPrefix": "192.168.240.0/20",
         "gatewaySubnetName": "GatewaySubnet",
         "gatewaySubnetPrefix": "192.168.250.0/24",
-        "gatewayPeeringName": "[concat(variables('gatewayVirtualNetworkName'), '/peering-to-remote-vnet')]"
+        "gatewaySubnetRef": "[concat(variables('labVirtualNetworkId'), '/subnets/', variables('gatewaySubnetName'))]",
+        "gatewayPeeringName": "peering-to-lab-vnet",
+        "gatewayPublicIpName": "[concat(variables('resourcePrefix'), '-pip')]"
     },
     "resources": [
         {
@@ -57,25 +65,86 @@
                         }
                     }
                 ]
+            },
+            "resources": [
+                {
+                    "apiVersion": "2016-06-01",
+                    "type": "virtualNetworkPeerings",
+                    "name": "[variables('gatewayPeeringName')]",
+                    "location": "[resourceGroup().location]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Network/virtualNetworks', variables('gatewayVirtualNetworkName'))]"
+                    ],
+                    "properties": {
+                        "allowVirtualNetworkAccess": true,
+                        "allowForwardedTraffic": true,
+                        "allowGatewayTransit": true,
+                        "useRemoteGateways": true,
+                        "remoteVirtualNetwork": {
+                            "id": "[variables('labVirtualNetworkId')]"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "apiVersion": "2015-06-15",
+            "type": "Microsoft.Network/publicIPAddresses",
+            "name": "[variables('gatewayPublicIpName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "publicIPAllocationMethod": "Dynamic"
             }
         },
         {
-            "apiVersion": "2016-06-01",
-            "type": "Microsoft.Network/virtualNetworks/virtualNetworkPeerings",
-            "name": "[variables('gatewayPeeringName')]",
+            "apiVersion": "2015-06-15",
+            "type": "Microsoft.Network/virtualNetworkGateways",
+            "name": "[variables('gatewayName')]",
             "location": "[resourceGroup().location]",
             "dependsOn": [
-                "[resourceId('Microsoft.Network/virtualNetworks', variables('gatewayVirtualNetworkName'))]"
+                "[concat('Microsoft.Network/publicIPAddresses/', variables('gatewayPublicIpName'))]",
+                "[concat('Microsoft.Network/virtualNetworks/', variables('gatewayVirtualNetworkName'))]"
             ],
             "properties": {
-              "allowVirtualNetworkAccess": true,
-              "allowForwardedTraffic": true,
-              "allowGatewayTransit": true,
-              "useRemoteGateways": true,
-              "remoteVirtualNetwork": {
-                "id": "[variables('labVirtualNetworkId')]"
-              }
+                "ipConfigurations": [
+                    {
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": {
+                                "id": "[variables('gatewaySubnetRef')]"
+                            },
+                            "publicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('gatewayPublicIpName'))]"
+                            }
+                        },
+                        "name": "vnetGatewayConfig"
+                    }
+                ],
+                "sku": {
+                    "name": "Basic",
+                    "tier": "Basic"
+                },
+                "gatewayType": "Vpn",
+                "vpnType": "RouteBased",
+                "enableBgp": "false",
+                "vpnClientConfiguration": {
+                    "vpnClientAddressPool": {
+                        "addressPrefixes": [
+                            "[parameters('vpnClientAddressPrefix')]"
+                        ]
+                    },
+                    "vpnClientRootCertificates": [
+                        {
+                            "name": "[parameters('vpnClientRootCertName')]",
+                            "properties": {
+                                "PublicCertData": "[parameters('vpnClientRootCertData')]"
+                            }
+                        }
+                    ],
+                    "vpnClientRevokedCertificates": [
+                    ]
+                }
             }
-          }
+        }
     ]
 }
