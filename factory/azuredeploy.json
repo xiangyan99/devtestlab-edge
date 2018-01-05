@@ -1,134 +1,213 @@
 {
-    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.0",
-    "parameters": {
-      "labName": {
-        "type": "string",
-        "defaultValue": "[resourceGroup().name]",
-        "metadata": {
-          "description":"The name of the lab (default: the name of the containing resource group)."
-        }
-      },
-      "githubName": {
-        "type": "string",
-        "defaultValue": "markusheiliger/devtestlab-edge",
-        "metadata": {
-          "description":"The name of the GitHub repository to access."
-        }
-      },      
-      "githubUri": {
-        "type": "string",
-        "defaultValue": "https://github.com/markusheiliger/devtestlab-edge.git",
-        "metadata": {
-          "description":"The URI of the GitHub repository to access."
-        }
-      },      
-      "githubBranch": {
-        "type": "string",
-        "defaultValue": "master",
-        "metadata": {
-          "description":"The branch of the GitHub repository to access."
-        }
-      },
-      "githubToken": {
-          "type": "securestring",        
-          "metadata": {
-            "description":"Your GitHub token to use for authenticating when accessing the artifacts and environment definitions."
-          }
-      },
-      "githubArtifactsPath": {
-        "type": "string",
-        "defaultValue": "/artifacts",
-        "metadata": {
-          "description":"The path to the artifacts folder inside the repository."
-        }
-      },
-      "githubEnvironmentsPath": {
-        "type": "string",
-        "defaultValue": "/environments",
-        "metadata": {
-          "description":"The path to the environments folder inside the repository."
-        }
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "labName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "The name of the lab (default: the name of the containing resource group)."
       }
     },
-    "variables": {
-        "labVirtualNetworkId": "[resourceId('Microsoft.Network/virtualNetworks', variables('labVirtualNetworkName'))]",
-        "labVirtualNetworkName": "[concat(parameters('labName'), 'VNet')]",
-        "labVirtualNetworkPrefix": "192.168.0.0/20",
-        "labSubnetId":"[concat(variables('labVirtualNetworkId'), '/subnets/', variables('labSubnetName'))]",
-        "labSubnetName":"LabSubnet",
-        "labSubnetPrefix": "192.168.0.0/20",
-        "artifactRepositoryName": "[concat('privaterepo', uniqueString(resourceGroup().id))]"
+    "vpnAccess": {
+      "type": "string",
+      "defaultValue": "no",
+      "allowedValues": [
+        "yes",
+        "no"
+      ],
+      "metadata": {
+        "description": "Enable OpenVPN access to the lab's network."
+      }
     },
-    "resources": [
-      {
-        "apiVersion": "2015-06-15",
-        "type": "Microsoft.Network/virtualNetworks",
-        "name": "[variables('labVirtualNetworkName')]",
-        "location": "[resourceGroup().location]",
-        "properties": {
-          "addressSpace": {
-            "addressPrefixes": [
-              "[variables('labVirtualNetworkPrefix')]"
-            ]
-          },
-          "subnets": [
-            {
-              "name": "[variables('labSubnetName')]",
-              "properties": {
-                "addressPrefix": "[variables('labSubnetPrefix')]"
-              }
-            }
+    "vpnAdminUsername": {
+      "type": "string",
+      "metadata": {
+        "description": "The OpenVPN administrator's username."
+      }
+    },
+    "vpnAdminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "The OpenVPN administrator's password."
+      }
+    },
+    "githubName": {
+      "type": "string",
+      "defaultValue": "markusheiliger/devtestlab-edge",
+      "metadata": {
+        "description": "The name of the GitHub repository to access."
+      }
+    },
+    "githubUri": {
+      "type": "string",
+      "defaultValue": "https://github.com/markusheiliger/devtestlab-edge.git",
+      "metadata": {
+        "description": "The URI of the GitHub repository to access."
+      }
+    },
+    "githubBranch": {
+      "type": "string",
+      "defaultValue": "master",
+      "metadata": {
+        "description": "The branch of the GitHub repository to access."
+      }
+    },
+    "githubToken": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Your GitHub token to use for authenticating when accessing the artifacts and environment definitions."
+      }
+    },
+    "githubArtifactsPath": {
+      "type": "string",
+      "defaultValue": "/artifacts",
+      "metadata": {
+        "description": "The path to the artifacts folder inside the repository."
+      }
+    },
+    "githubEnvironmentsPath": {
+      "type": "string",
+      "defaultValue": "/environments",
+      "metadata": {
+        "description": "The path to the environments folder inside the repository."
+      }
+    }
+  },
+  "variables": {
+    "labVirtualNetworkId": "[resourceId('Microsoft.Network/virtualNetworks', variables('labVirtualNetworkName'))]",
+    "labVirtualNetworkName": "[concat(parameters('labName'), 'VNet')]",
+    "labVirtualNetworkPrefix": "192.168.0.0/16",
+    "labSubnet1Id": "[concat(variables('labVirtualNetworkId'), '/subnets/', variables('labSubnet1Name'))]",
+    "labSubnet1Name": "LabSubnet1",
+    "labSubnet1Prefix": "192.168.0.0/18",
+    "labSubnet2Id": "[concat(variables('labVirtualNetworkId'), '/subnets/', variables('labSubnet2Name'))]",
+    "labSubnet2Name": "LabSubnet2",
+    "labSubnet2Prefix": "192.168.64.0/18",
+    "labGatewayId": "[concat(variables('labVirtualNetworkId'), '/subnets/', variables('labGatewayName'))]",
+    "labGatewayName": "LabSubnet2",
+    "labGatewayPrefix": "192.168.250.0/24",
+    "artifactRepositoryName": "[concat('privaterepo', uniqueString(resourceGroup().id))]"
+  },
+  "resources": [
+    {
+      "apiVersion": "2015-06-15",
+      "type": "Microsoft.Network/virtualNetworks",
+      "name": "[variables('labVirtualNetworkName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[variables('labVirtualNetworkPrefix')]"
           ]
-        }
-      },
-      {
-        "apiVersion": "2017-04-26-preview",
-        "type": "Microsoft.DevTestLab/labs",
-        "name": "[parameters('labName')]",
-        "location": "[resourceGroup().location]",        
-        "resources": [
+        },
+        "subnets": [
           {
-            "apiVersion": "2017-04-26-preview",
-            "name": "[variables('labVirtualNetworkName')]",
-            "type": "virtualNetworks",
-            "dependsOn": [
-              "[resourceId('Microsoft.DevTestLab/labs', parameters('labName'))]",
-              "[resourceId('Microsoft.Network/virtualNetworks', variables('labVirtualNetworkName'))]"
-            ],
+            "name": "[variables('labSubnet1Name')]",
             "properties": {
-              "externalProviderResourceId": "[variables('labVirtualNetworkId')]",
-              "subnetOverrides": [
-                {
-                  "name": "[variables('labSubnetName')]",
-                  "resourceId": "[variables('labSubnetId')]",
-                  "useInVmCreationPermission": "Allow",
-                  "usePublicIpAddressPermission": "Allow"
-                }
-              ]
+              "addressPrefix": "[variables('labSubnet1Prefix')]"
             }
           },
           {
-            "apiVersion": "2017-04-26-preview",
-            "name": "[variables('artifactRepositoryName')]",
-            "type": "artifactSources",
-            "dependsOn": [
-              "[resourceId('Microsoft.DevTestLab/labs', parameters('labName'))]"
-            ],
+            "name": "[variables('labSubnet2Name')]",
             "properties": {
-                "securityToken": "[parameters('githubToken')]",
-                "displayName": "[parameters('githubName')]",
-                "uri": "[parameters('githubUri')]",
-                "sourceType": "GitHub",
-                "folderPath": "[parameters('githubArtifactsPath')]",
-                "armTemplateFolderPath": "[parameters('githubEnvironmentsPath')]",
-                "branchRef": "[parameters('githubBranch')]",
-                "status": "Enabled"
+              "addressPrefix": "[variables('labSubnet2Prefix')]"
+            }
+          },
+          {
+            "name": "[variables('labGatewayName')]",
+            "properties": {
+              "addressPrefix": "[variables('labGatewayPrefix')]"
             }
           }
         ]
       }
-    ],
-    "outputs": {
+    },
+    {
+      "apiVersion": "2017-04-26-preview",
+      "type": "Microsoft.DevTestLab/labs",
+      "name": "[parameters('labName')]",
+      "location": "[resourceGroup().location]",
+      "resources": [
+        {
+          "apiVersion": "2017-04-26-preview",
+          "name": "[variables('labVirtualNetworkName')]",
+          "type": "virtualNetworks",
+          "dependsOn": [
+            "[resourceId('Microsoft.DevTestLab/labs', parameters('labName'))]",
+            "[resourceId('Microsoft.Network/virtualNetworks', variables('labVirtualNetworkName'))]"
+          ],
+          "properties": {
+            "externalProviderResourceId": "[variables('labVirtualNetworkId')]",
+            "subnetOverrides": [
+              {
+                "name": "[variables('labSubnet1Name')]",
+                "resourceId": "[variables('labSubnet1Id')]",
+                "useInVmCreationPermission": "Allow",
+                "usePublicIpAddressPermission": "Allow"
+              },
+              {
+                "name": "[variables('labSubnet2Name')]",
+                "resourceId": "[variables('labSubnet2Id')]",
+                "useInVmCreationPermission": "Allow",
+                "usePublicIpAddressPermission": "Allow"
+              }
+            ]
+          }
+        },
+        {
+          "apiVersion": "2017-04-26-preview",
+          "name": "[variables('artifactRepositoryName')]",
+          "type": "artifactSources",
+          "dependsOn": [
+            "[resourceId('Microsoft.DevTestLab/labs', parameters('labName'))]"
+          ],
+          "properties": {
+            "securityToken": "[parameters('githubToken')]",
+            "displayName": "[parameters('githubName')]",
+            "uri": "[parameters('githubUri')]",
+            "sourceType": "GitHub",
+            "folderPath": "[parameters('githubArtifactsPath')]",
+            "armTemplateFolderPath": "[parameters('githubEnvironmentsPath')]",
+            "branchRef": "[parameters('githubBranch')]",
+            "status": "Enabled"
+          }
+        }
+      ]
+    },
+    {
+      "condition": "[equals(parameters('vpnAccess'), 'yes')]",
+      "name": "[concat(deployment().name, '-OpenVPNAS')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2015-01-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('labVirtualNetworkName'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "[uri(deployment().properties.templateLink.uri, 'azuredeploy_ovpnas.json')]",
+          "contentVersion": "1.0.0.0"
+        },
+        "parameters": {
+          "adminUsername": {
+            "value": "[parameters('vpnAdminUsername')]"
+          },
+          "adminPassword": {
+            "value": "[parameters('vpnAdminPassword')]"
+          },
+          "labName": {
+            "value": "[parameters('labName')]"
+          },
+          "labNetworkName": {
+            "value": "[variables('labVirtualNetworkName')]"
+          },
+          "labSubnetName": {
+            "value": "[variables('labGatewayName')]"
+          }
+        }
+      }
     }
-  }
+  ],
+  "outputs": {}
+}
