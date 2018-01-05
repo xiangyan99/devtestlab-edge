@@ -85,7 +85,7 @@
     "labSubnet2Name": "LabSubnet2",
     "labSubnet2Prefix": "192.168.64.0/18",
     "labGatewayId": "[concat(variables('labVirtualNetworkId'), '/subnets/', variables('labGatewayName'))]",
-    "labGatewayName": "LabSubnet2",
+    "labGatewayName": "LabGateway",
     "labGatewayPrefix": "192.168.250.0/24",
     "artifactRepositoryName": "[concat('privaterepo', uniqueString(resourceGroup().id))]"
   },
