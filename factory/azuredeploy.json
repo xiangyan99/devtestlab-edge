@@ -20,6 +20,17 @@
         "description": "Enable OpenVPN access to the lab's network."
       }
     },
+    "vpnGatewayType": {
+      "type":"string",
+      "defaultValue": "Softether",
+      "allowedValues": [
+        "OpenVPN",
+        "Softether"
+      ],
+      "metadata": {
+        "description": "The type of gateway to provision."
+      }
+    },
     "vpnAdminUsername": {
       "type": "string",
       "metadata": {
@@ -72,18 +83,29 @@
       "metadata": {
         "description": "The path to the environments folder inside the repository."
       }
+    },
+    "_artifactsLocation": {
+      "type": "string",
+      "metadata": {
+        "description": "The base URI where artifacts required by this template are located. When the template is deployed using the accompanying scripts, a private location in the subscription will be used and this value will be automatically generated."
+      },
+      "defaultValue": "[uri(deployment().properties.templateLink.uri, '')]"
+    },
+    "_artifactsLocationSasToken": {
+      "type": "securestring",
+      "metadata": {
+        "description": "The sasToken required to access _artifactsLocation.  When the template is deployed using the accompanying scripts, a sasToken will be automatically generated."
+      },
+      "defaultValue": ""
     }
   },
   "variables": {
     "labVirtualNetworkId": "[resourceId('Microsoft.Network/virtualNetworks', variables('labVirtualNetworkName'))]",
     "labVirtualNetworkName": "[concat(parameters('labName'), 'VNet')]",
     "labVirtualNetworkPrefix": "192.168.0.0/16",
-    "labSubnet1Id": "[concat(variables('labVirtualNetworkId'), '/subnets/', variables('labSubnet1Name'))]",
-    "labSubnet1Name": "LabSubnet1",
-    "labSubnet1Prefix": "192.168.0.0/18",
-    "labSubnet2Id": "[concat(variables('labVirtualNetworkId'), '/subnets/', variables('labSubnet2Name'))]",
-    "labSubnet2Name": "LabSubnet2",
-    "labSubnet2Prefix": "192.168.64.0/18",
+    "labSubnetId": "[concat(variables('labVirtualNetworkId'), '/subnets/', variables('labSubnetName'))]",
+    "labSubnetName": "LabSubnet1",
+    "labSubnetPrefix": "192.168.0.0/18",
     "labGatewayId": "[concat(variables('labVirtualNetworkId'), '/subnets/', variables('labGatewayName'))]",
     "labGatewayName": "LabGateway",
     "labGatewayPrefix": "192.168.250.0/24",
@@ -103,15 +125,9 @@
         },
         "subnets": [
           {
-            "name": "[variables('labSubnet1Name')]",
+            "name": "[variables('labSubnetName')]",
             "properties": {
-              "addressPrefix": "[variables('labSubnet1Prefix')]"
-            }
-          },
-          {
-            "name": "[variables('labSubnet2Name')]",
-            "properties": {
-              "addressPrefix": "[variables('labSubnet2Prefix')]"
+              "addressPrefix": "[variables('labSubnetPrefix')]"
             }
           },
           {
@@ -141,14 +157,8 @@
             "externalProviderResourceId": "[variables('labVirtualNetworkId')]",
             "subnetOverrides": [
               {
-                "name": "[variables('labSubnet1Name')]",
-                "resourceId": "[variables('labSubnet1Id')]",
-                "useInVmCreationPermission": "Allow",
-                "usePublicIpAddressPermission": "Allow"
-              },
-              {
-                "name": "[variables('labSubnet2Name')]",
-                "resourceId": "[variables('labSubnet2Id')]",
+                "name": "[variables('labSubnetName')]",
+                "resourceId": "[variables('labSubnetId')]",
                 "useInVmCreationPermission": "Allow",
                 "usePublicIpAddressPermission": "Allow"
               }
@@ -177,7 +187,7 @@
     },
     {
       "condition": "[equals(parameters('vpnAccess'), 'yes')]",
-      "name": "[concat(deployment().name, '-OpenVPNAS')]",
+      "name": "[concat(deployment().name, '-', parameters('vpnGatewayType'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2015-01-01",
       "dependsOn": [
@@ -186,10 +196,13 @@
       "properties": {
         "mode": "Incremental",
         "templateLink": {
-          "uri": "[uri(deployment().properties.templateLink.uri, 'azuredeploy_ovpnas.json')]",
+          "uri": "[concat(parameters('_artifactsLocation'), '/azuredeploy_gateway.json', parameters('_artifactsLocationSasToken'))]",
           "contentVersion": "1.0.0.0"
         },
         "parameters": {
+          "gatewayType": {
+            "value": "[parameters('vpnGatewayType')]"
+          },
           "adminUsername": {
             "value": "[parameters('vpnAdminUsername')]"
           },
@@ -203,7 +216,16 @@
             "value": "[variables('labVirtualNetworkName')]"
           },
           "labSubnetName": {
+            "value": "[variables('labSubnetName')]"
+          },
+          "labGatewayName": {
             "value": "[variables('labGatewayName')]"
+          },
+          "_artifactsLocation": {
+            "value": "[parameters('_artifactsLocation')]"
+          },
+          "_artifactsLocationSasToken": {
+            "value": "[parameters('_artifactsLocationSasToken')]"
           }
         }
       }

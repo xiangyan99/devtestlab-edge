@@ -2,6 +2,17 @@
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
+      "gatewayType": {
+        "type":"string",
+        "defaultValue": "Softether",
+        "allowedValues": [
+          "OpenVPN",
+          "Softether"
+        ],
+        "metadata": {
+          "description": "The type of gateway to provision."
+        }
+      },
       "adminUsername": {
         "type": "string",
         "metadata": {
@@ -29,22 +40,45 @@
       "labSubnetName":  {
         "type": "string",
         "metadata": {
-          "description": "Name of the labs gateway subnet."
+          "description": "Name of the labs subnet."
         }
+      },
+      "labGatewayName":  {
+        "type": "string",
+        "metadata": {
+          "description": "Name of the labs gateway."
+        }
+      },
+      "_artifactsLocation": {
+        "type": "string",
+        "metadata": {
+          "description": "The base URI where artifacts required by this template are located. When the template is deployed using the accompanying scripts, a private location in the subscription will be used and this value will be automatically generated."
+        },
+        "defaultValue": "[uri(deployment().properties.templateLink.uri, '')]"
+      },
+      "_artifactsLocationSasToken": {
+        "type": "securestring",
+        "metadata": {
+          "description": "The sasToken required to access _artifactsLocation.  When the template is deployed using the accompanying scripts, a sasToken will be automatically generated."
+        },
+        "defaultValue": ""
       }
     },
     "variables": {
+      "resourcePrefix": "[parameters('gatewayType')]",
       "imagePublisher": "Canonical",
       "imageOffer": "UbuntuServer",
       "imageSku": "16.04.0-LTS",
-      "nicName": "OpenVPN-NIC",
+      "nicNameInt": "[concat(variables('resourcePrefix'), '-NICINT')]",
+      "nicNameExt": "[concat(variables('resourcePrefix'), '-NICEXT')]",
       "storageAccountType": "Standard_LRS",
-      "publicIPAddressName": "OpenVPN-PublicIP",
+      "publicIPAddressName": "[concat(variables('resourcePrefix'), '-PIP')]",
       "publicIPAddressType": "Static",
       "publicIPAddressLabel": "[concat('vpn-', toLower(parameters('labName')))]",
-      "vmName": "OpenVPN-VM",
+      "vmName": "[concat(variables('resourcePrefix'), '-VM')]",
       "subnetRef": "[resourceId('Microsoft.Network/virtualNetworks/subnets',parameters('labNetworkName'),parameters('labSubnetName'))]",
-      "networkSecurityGroupName": "OpenVPN-NSG"
+      "gatewayRef": "[resourceId('Microsoft.Network/virtualNetworks/subnets',parameters('labNetworkName'),parameters('labGatewayName'))]",
+      "networkSecurityGroupName": "[concat(variables('resourcePrefix'), '-NSG')]"
     },
     "resources": [
       {
@@ -124,7 +158,26 @@
       {
         "apiVersion": "2015-06-15",
         "type": "Microsoft.Network/networkInterfaces",
-        "name": "[variables('nicName')]",
+        "name": "[variables('nicNameInt')]",
+        "location": "[resourceGroup().location]",
+        "properties": {
+          "ipConfigurations": [
+            {
+              "name": "ipconfig1",
+              "properties": {
+                "privateIPAllocationMethod": "Dynamic",
+                "subnet": {
+                  "id": "[variables('subnetRef')]"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "apiVersion": "2015-06-15",
+        "type": "Microsoft.Network/networkInterfaces",
+        "name": "[variables('nicNameExt')]",
         "location": "[resourceGroup().location]",
         "dependsOn": [
           "[concat('Microsoft.Network/publicIPAddresses/', variables('publicIPAddressName'))]",
@@ -140,7 +193,7 @@
                   "id": "[resourceId('Microsoft.Network/publicIPAddresses',variables('publicIPAddressName'))]"
                 },
                 "subnet": {
-                  "id": "[variables('subnetRef')]"
+                  "id": "[variables('gatewayRef')]"
                 }
               }
             }
@@ -156,7 +209,7 @@
         "name": "[variables('vmName')]",
         "location": "[resourceGroup().location]",
         "dependsOn": [
-          "[concat('Microsoft.Network/networkInterfaces/', variables('nicName'))]"
+          "[concat('Microsoft.Network/networkInterfaces/', variables('nicNameExt'))]"
         ],
         "properties": {
           "hardwareProfile": {
@@ -184,7 +237,12 @@
           "networkProfile": {
             "networkInterfaces": [
               {
-                "id": "[resourceId('Microsoft.Network/networkInterfaces',variables('nicName'))]"
+                "id": "[resourceId('Microsoft.Network/networkInterfaces',variables('nicNameExt'))]",
+                "properties": { "primary": true }
+              },
+              {
+                "id": "[resourceId('Microsoft.Network/networkInterfaces',variables('nicNameInt'))]",
+                "properties": { "primary": false }
               }
             ]
           }
@@ -192,7 +250,7 @@
       },
       {
         "type": "Microsoft.Compute/virtualMachines/extensions",
-        "name": "[concat(variables('vmName'),'/InstallOVPN')]",
+        "name": "[concat(variables('vmName'), '/', parameters('gatewayType'))]",
         "apiVersion": "2015-06-15",
         "location": "[resourceGroup().location]",
         "dependsOn": [
@@ -205,11 +263,11 @@
           "autoUpgradeMinorVersion": true,
           "settings": {
             "fileUris": [
-              "https://raw.githubusercontent.com/markusheiliger/devtestlab-edge/vpn-gateway/factory/azuredeploy_ovpnas.sh"
+              "[concat(parameters('_artifactsLocation'), '/azuredeploy_', toLower(parameters('gatewayType')), '.sh', parameters('_artifactsLocationSasToken'))]"
             ]
           },
           "protectedSettings": {
-            "commandToExecute": "[concat('bash azuredeploy_ovpnas.sh ', parameters('adminPassword'))]"
+            "commandToExecute": "[concat('bash azuredeploy_', toLower(parameters('gatewayType')), '.sh ', parameters('adminPassword'))]"
           }
         }
       }
