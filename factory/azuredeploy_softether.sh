@@ -1,6 +1,6 @@
 #!/bin/bash
-apt-get update && apt-get upgrade -y
-apt-get install -y wget checkinstall build-essential
+apt-get update
+apt-get install -y checkinstall build-essential
 
 wget http://softether-download.com/files/softether/v4.04-9412-rtm-2014.01.15-tree/Linux/SoftEther%20VPN%20Server/64bit%20-%20Intel%20x64%20or%20AMD64/softether-vpnserver-v4.04-9412-rtm-2014.01.15-linux-x64-64bit.tar.gz
 tar -xzf softether-vpnserver-v4.04-9412-rtm-2014.01.15-linux-x64-64bit.tar.gz
