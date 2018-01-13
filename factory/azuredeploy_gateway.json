@@ -2,17 +2,6 @@
   "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "gatewayType": {
-      "type": "string",
-      "defaultValue": "Softether",
-      "allowedValues": [
-        "OpenVPN",
-        "Softether"
-      ],
-      "metadata": {
-        "description": "The type of gateway to provision."
-      }
-    },
     "adminUsername": {
       "type": "string",
       "metadata": {
@@ -43,10 +32,16 @@
         "description": "Name of the labs subnet."
       }
     },
-    "labGatewayName": {
+    "labGatewayIP": {
       "type": "string",
       "metadata": {
-        "description": "Name of the labs gateway."
+        "description": "The private IP of the gateway."
+      }
+    },
+    "labGatewayPoolPrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "The network prefix of the gateway client pool."
       }
     },
     "_artifactsLocation": {
@@ -65,130 +60,19 @@
     }
   },
   "variables": {
-    "resourcePrefix": "[parameters('gatewayType')]",
+    "resourcePrefix": "OpenVPN",
     "imagePublisher": "Canonical",
     "imageOffer": "UbuntuServer",
     "imageSku": "16.04.0-LTS",
-    "nicNameInt": "[concat(variables('resourcePrefix'), '-NICINT')]",
-    "nicNameExt": "[concat(variables('resourcePrefix'), '-NICEXT')]",
+    "nicName": "[concat(variables('resourcePrefix'), '-NIC')]",
     "storageAccountType": "Standard_LRS",
     "publicIPAddressName": "[concat(variables('resourcePrefix'), '-PIP')]",
     "publicIPAddressType": "Static",
     "publicIPAddressLabel": "[concat('vpn-', toLower(parameters('labName')))]",
     "vmName": "[concat(variables('resourcePrefix'), '-VM')]",
+    "udrName": "[concat(variables('resourcePrefix'), '-UDR')]",
     "subnetRef": "[resourceId('Microsoft.Network/virtualNetworks/subnets',parameters('labNetworkName'),parameters('labSubnetName'))]",
-    "gatewayRef": "[resourceId('Microsoft.Network/virtualNetworks/subnets',parameters('labNetworkName'),parameters('labGatewayName'))]",
-    "networkSecurityGroupName": "[concat(variables('resourcePrefix'), '-NSG')]",
-    "firewallRules": {
-      "OpenVPN": [
-        {
-          "name": "OpenVPN_WebServer",
-          "properties": {
-            "priority": 1200,
-            "sourceAddressPrefix": "*",
-            "protocol": "TCP",
-            "destinationPortRange": "943",
-            "access": "Allow",
-            "direction": "Inbound",
-            "sourcePortRange": "*",
-            "destinationAddressPrefix": "*"
-          }
-        },
-        {
-          "name": "OpenVPN_443",
-          "properties": {
-            "priority": 1100,
-            "sourceAddressPrefix": "*",
-            "protocol": "TCP",
-            "destinationPortRange": "443",
-            "access": "Allow",
-            "direction": "Inbound",
-            "sourcePortRange": "*",
-            "destinationAddressPrefix": "*"
-          }
-        },
-        {
-          "name": "OpenVPN_1194",
-          "properties": {
-            "priority": 1300,
-            "sourceAddressPrefix": "*",
-            "protocol": "UDP",
-            "destinationPortRange": "1194",
-            "access": "Allow",
-            "direction": "Inbound",
-            "sourcePortRange": "*",
-            "destinationAddressPrefix": "*"
-          }
-        },
-        {
-          "name": "default-allow-ssh",
-          "properties": {
-            "priority": 1000,
-            "sourceAddressPrefix": "*",
-            "protocol": "TCP",
-            "destinationPortRange": "22",
-            "access": "Allow",
-            "direction": "Inbound",
-            "sourcePortRange": "*",
-            "destinationAddressPrefix": "*"
-          }
-        }
-      ],
-      "Softether": [
-        {
-          "name": "Softether_443",
-          "properties": {
-            "priority": 1100,
-            "sourceAddressPrefix": "*",
-            "protocol": "TCP",
-            "destinationPortRange": "443",
-            "access": "Allow",
-            "direction": "Inbound",
-            "sourcePortRange": "*",
-            "destinationAddressPrefix": "*"
-          }
-        },
-        {
-          "name": "Softether_992",
-          "properties": {
-            "priority": 1200,
-            "sourceAddressPrefix": "*",
-            "protocol": "TCP",
-            "destinationPortRange": "992",
-            "access": "Allow",
-            "direction": "Inbound",
-            "sourcePortRange": "*",
-            "destinationAddressPrefix": "*"
-          }
-        },
-        {
-          "name": "Softether_5555",
-          "properties": {
-            "priority": 1300,
-            "sourceAddressPrefix": "*",
-            "protocol": "TCP",
-            "destinationPortRange": "5555",
-            "access": "Allow",
-            "direction": "Inbound",
-            "sourcePortRange": "*",
-            "destinationAddressPrefix": "*"
-          }
-        },
-        {
-          "name": "default-allow-ssh",
-          "properties": {
-            "priority": 1000,
-            "sourceAddressPrefix": "*",
-            "protocol": "TCP",
-            "destinationPortRange": "22",
-            "access": "Allow",
-            "direction": "Inbound",
-            "sourcePortRange": "*",
-            "destinationAddressPrefix": "*"
-          }
-        }
-      ]
-    }
+    "networkSecurityGroupName": "[concat(variables('resourcePrefix'), '-NSG')]"
   },
   "resources": [
     {
@@ -209,128 +93,159 @@
       "apiVersion": "2015-06-15",
       "location": "[resourceGroup().location]",
       "properties": {
-        "securityRules": "[variables('firewallRules')[parameters('gatewayType')]]"
-      }
-    },
-    {
-      "apiVersion": "2015-06-15",
-      "type": "Microsoft.Network/networkInterfaces",
-      "name": "[variables('nicNameInt')]",
-      "location": "[resourceGroup().location]",
-      "properties": {
-        "ipConfigurations": [
+        "securityRules": [
           {
-            "name": "ipconfig1",
+            "name": "OpenVPN_WebServer",
             "properties": {
-              "privateIPAllocationMethod": "Dynamic",
-              "subnet": {
-                "id": "[variables('subnetRef')]"
-              }
+              "priority": 1200,
+              "sourceAddressPrefix": "*",
+              "protocol": "TCP",
+              "destinationPortRange": "943",
+              "access": "Allow",
+              "direction": "Inbound",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*"
+            }
+          },
+          {
+            "name": "OpenVPN_443",
+            "properties": {
+              "priority": 1100,
+              "sourceAddressPrefix": "*",
+              "protocol": "TCP",
+              "destinationPortRange": "443",
+              "access": "Allow",
+              "direction": "Inbound",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*"
+            }
+          },
+          {
+            "name": "OpenVPN_1194",
+            "properties": {
+              "priority": 1300,
+              "sourceAddressPrefix": "*",
+              "protocol": "UDP",
+              "destinationPortRange": "1194",
+              "access": "Allow",
+              "direction": "Inbound",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*"
+            }
+          },
+          {
+            "name": "default-allow-ssh",
+            "properties": {
+              "priority": 1000,
+              "sourceAddressPrefix": "*",
+              "protocol": "TCP",
+              "destinationPortRange": "22",
+              "access": "Allow",
+              "direction": "Inbound",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*"
             }
           }
         ]
       }
     },
+
     {
-      "apiVersion": "2015-06-15",
-      "type": "Microsoft.Network/networkInterfaces",
-      "name": "[variables('nicNameExt')]",
-      "location": "[resourceGroup().location]",
-      "dependsOn": [
-        "[concat('Microsoft.Network/publicIPAddresses/', variables('publicIPAddressName'))]",
-        "[concat('Microsoft.Network/networkSecurityGroups/', variables('networkSecurityGroupName'))]"
-      ],
-      "properties": {
-        "ipConfigurations": [
-          {
-            "name": "ipconfig1",
-            "properties": {
-              "privateIPAllocationMethod": "Dynamic",
-              "publicIPAddress": {
-                "id": "[resourceId('Microsoft.Network/publicIPAddresses',variables('publicIPAddressName'))]"
-              },
-              "subnet": {
-                "id": "[variables('gatewayRef')]"
-              }
-            }
-          }
+        "apiVersion": "2015-06-15",
+        "type": "Microsoft.Network/networkInterfaces",
+        "name": "[variables('nicName')]",
+        "location": "[resourceGroup().location]",
+        "dependsOn": [
+          "[concat('Microsoft.Network/publicIPAddresses/', variables('publicIPAddressName'))]",
+          "[concat('Microsoft.Network/networkSecurityGroups/', variables('networkSecurityGroupName'))]"
         ],
-        "networkSecurityGroup": {
-          "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupName'))]"
-        }
-      }
-    },
-    {
-      "apiVersion": "2017-03-30",
-      "type": "Microsoft.Compute/virtualMachines",
-      "name": "[variables('vmName')]",
-      "location": "[resourceGroup().location]",
-      "dependsOn": [
-        "[concat('Microsoft.Network/networkInterfaces/', variables('nicNameExt'))]"
-      ],
-      "properties": {
-        "hardwareProfile": {
-          "vmSize": "Basic_A0"
-        },
-        "osProfile": {
-          "computerName": "[variables('vmName')]",
-          "adminUsername": "[parameters('adminUsername')]",
-          "adminPassword": "[parameters('adminPassword')]"
-        },
-        "storageProfile": {
-          "imageReference": {
-            "publisher": "[variables('imagePublisher')]",
-            "offer": "[variables('imageOffer')]",
-            "sku": "[variables('imageSku')]",
-            "version": "latest"
+        "properties": {
+          "ipConfigurations": [
+            {
+              "name": "ipconfig1",
+              "properties": {
+                "PrivateIpAddress": "[parameters('labGatewayIP')]",
+                "privateIPAllocationMethod": "Static",
+                "publicIPAddress": {
+                  "id": "[resourceId('Microsoft.Network/publicIPAddresses',variables('publicIPAddressName'))]"
+                },
+                "subnet": {
+                  "id": "[variables('subnetRef')]"
+                }
+              }
+            }
+          ],
+          "networkSecurityGroup": {
+            "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupName'))]"
           },
-          "osDisk": {
-            "createOption": "fromImage",
-            "managedDisk": {
-              "storageAccountType": "[variables('storageAccountType')]"
-            }
-          }
-        },
-        "networkProfile": {
-          "networkInterfaces": [
-            {
-              "id": "[resourceId('Microsoft.Network/networkInterfaces',variables('nicNameExt'))]",
-              "properties": {
-                "primary": true
-              }
+          "enableIPForwarding": true
+        }
+      },
+      {
+        "apiVersion": "2017-03-30",
+        "type": "Microsoft.Compute/virtualMachines",
+        "name": "[variables('vmName')]",
+        "location": "[resourceGroup().location]",
+        "dependsOn": [
+          "[concat('Microsoft.Network/networkInterfaces/', variables('nicName'))]"
+        ],
+        "properties": {
+          "hardwareProfile": {
+            "vmSize": "Basic_A0"
+          },
+          "osProfile": {
+            "computerName": "[variables('vmName')]",
+            "adminUsername": "[parameters('adminUsername')]",
+            "adminPassword": "[parameters('adminPassword')]"
+          },
+          "storageProfile": {
+            "imageReference": {
+              "publisher": "[variables('imagePublisher')]",
+              "offer": "[variables('imageOffer')]",
+              "sku": "[variables('imageSku')]",
+              "version": "latest"
             },
-            {
-              "id": "[resourceId('Microsoft.Network/networkInterfaces',variables('nicNameInt'))]",
-              "properties": {
-                "primary": false
+            "osDisk": {
+              "createOption": "fromImage",
+              "managedDisk": {
+                "storageAccountType": "[variables('storageAccountType')]"
               }
             }
-          ]
+          },
+          "networkProfile": {
+            "networkInterfaces": [
+              {
+                "id": "[resourceId('Microsoft.Network/networkInterfaces',variables('nicName'))]",
+                "properties": {
+                  "primary": true
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Microsoft.Compute/virtualMachines/extensions",
+        "name": "[concat(variables('vmName'), '/OpenVPN')]",
+        "apiVersion": "2015-06-15",
+        "location": "[resourceGroup().location]",
+        "dependsOn": [
+          "[concat('Microsoft.Compute/virtualMachines/', variables('vmName'))]"
+        ],
+        "properties": {
+          "publisher": "Microsoft.Azure.Extensions",
+          "type": "CustomScript",
+          "typeHandlerVersion": "2.0",
+          "autoUpgradeMinorVersion": true,
+          "settings": {
+            "fileUris": [
+              "[concat(parameters('_artifactsLocation'), '/azuredeploy_openvpn.sh', parameters('_artifactsLocationSasToken'))]"
+            ]
+          },
+          "protectedSettings": {
+            "commandToExecute": "[concat('bash azuredeploy_openvpn.sh ', parameters('adminPassword'), ' ', parameters('labGatewayPoolPrefix'))]"
+          }
         }
       }
-    },
-    {
-      "type": "Microsoft.Compute/virtualMachines/extensions",
-      "name": "[concat(variables('vmName'), '/', parameters('gatewayType'))]",
-      "apiVersion": "2015-06-15",
-      "location": "[resourceGroup().location]",
-      "dependsOn": [
-        "[concat('Microsoft.Compute/virtualMachines/', variables('vmName'))]"
-      ],
-      "properties": {
-        "publisher": "Microsoft.Azure.Extensions",
-        "type": "CustomScript",
-        "typeHandlerVersion": "2.0",
-        "autoUpgradeMinorVersion": true,
-        "settings": {
-          "fileUris": [
-            "[concat(parameters('_artifactsLocation'), '/azuredeploy_', toLower(parameters('gatewayType')), '.sh', parameters('_artifactsLocationSasToken'))]"
-          ]
-        },
-        "protectedSettings": {
-          "commandToExecute": "[concat('bash azuredeploy_', toLower(parameters('gatewayType')), '.sh ', parameters('adminPassword'))]"
-        }
-      }
-    }
-  ]
-}
+    ]
+  }

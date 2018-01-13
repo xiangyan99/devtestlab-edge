@@ -20,17 +20,6 @@
         "description": "Enable OpenVPN access to the lab's network."
       }
     },
-    "vpnGatewayType": {
-      "type":"string",
-      "defaultValue": "Softether",
-      "allowedValues": [
-        "OpenVPN",
-        "Softether"
-      ],
-      "metadata": {
-        "description": "The type of gateway to provision."
-      }
-    },
     "vpnAdminUsername": {
       "type": "string",
       "metadata": {
@@ -106,17 +95,42 @@
     "labSubnetId": "[concat(variables('labVirtualNetworkId'), '/subnets/', variables('labSubnetName'))]",
     "labSubnetName": "LabSubnet1",
     "labSubnetPrefix": "192.168.0.0/18",
-    "labGatewayId": "[concat(variables('labVirtualNetworkId'), '/subnets/', variables('labGatewayName'))]",
-    "labGatewayName": "LabGateway",
-    "labGatewayPrefix": "192.168.250.0/24",
+    "labGatewayIP": "192.168.0.4",
+    "labGatewayPoolPrefix": "192.168.250.0/24",
+    "labRoutesName": "[concat(parameters('labName'), 'Routes')]",
+    "labRoutes" : {
+      "gateway" : [
+        {
+          "name": "VPNDownstream",
+          "properties": {
+            "addressPrefix": "[variables('labGatewayPoolPrefix')]",
+            "nextHopType": "VirtualAppliance",
+            "nextHopIpAddress": "[variables('labGatewayIP')]"
+          }
+        }
+      ],
+      "default": []
+    },
     "artifactRepositoryName": "[concat('privaterepo', uniqueString(resourceGroup().id))]"
   },
   "resources": [
+    {
+      "type": "Microsoft.Network/routeTables",
+      "name": "[variables('labRoutesName')]",
+      "apiVersion": "2015-06-15",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "routes": "[variables('labRoutes')[if(equals(parameters('vpnAccess'), 'yes'), 'gateway', 'default')]]"
+      }
+    },
     {
       "apiVersion": "2015-06-15",
       "type": "Microsoft.Network/virtualNetworks",
       "name": "[variables('labVirtualNetworkName')]",
       "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/routeTables/', variables('labRoutesName'))]"
+      ],
       "properties": {
         "addressSpace": {
           "addressPrefixes": [
@@ -127,13 +141,10 @@
           {
             "name": "[variables('labSubnetName')]",
             "properties": {
-              "addressPrefix": "[variables('labSubnetPrefix')]"
-            }
-          },
-          {
-            "name": "[variables('labGatewayName')]",
-            "properties": {
-              "addressPrefix": "[variables('labGatewayPrefix')]"
+              "addressPrefix": "[variables('labSubnetPrefix')]",
+              "routeTable": {
+                "id": "[resourceId('Microsoft.Network/routeTables', variables('labRoutesName'))]"
+              }
             }
           }
         ]
@@ -187,7 +198,7 @@
     },
     {
       "condition": "[equals(parameters('vpnAccess'), 'yes')]",
-      "name": "[concat(deployment().name, '-', parameters('vpnGatewayType'))]",
+      "name": "[concat(deployment().name, '-VPNGateway')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2015-01-01",
       "dependsOn": [
@@ -200,9 +211,6 @@
           "contentVersion": "1.0.0.0"
         },
         "parameters": {
-          "gatewayType": {
-            "value": "[parameters('vpnGatewayType')]"
-          },
           "adminUsername": {
             "value": "[parameters('vpnAdminUsername')]"
           },
@@ -218,8 +226,11 @@
           "labSubnetName": {
             "value": "[variables('labSubnetName')]"
           },
-          "labGatewayName": {
-            "value": "[variables('labGatewayName')]"
+          "labGatewayIP": {
+            "value": "[variables('labGatewayIP')]"
+          },
+          "labGatewayPoolPrefix":{
+            "value": "[variables('labGatewayPoolPrefix')]"
           },
           "_artifactsLocation": {
             "value": "[parameters('_artifactsLocation')]"

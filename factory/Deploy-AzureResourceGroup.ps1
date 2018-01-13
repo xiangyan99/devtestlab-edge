@@ -16,6 +16,7 @@ Param(
     [string] $DSCSourceFolder = 'DSC',
     [switch] $ValidateOnly,
     [switch] $Reset,
+    [switch] $Clean,
     [switch] $Force
 )
 
@@ -31,6 +32,9 @@ function Format-ValidationOutput {
     Set-StrictMode -Off
     return @($ValidationOutput | Where-Object { $_ -ne $null } | ForEach-Object { @('  ' * $Depth + ': ' + $_.Message) + @(Format-ValidationOutput @($_.Details) ($Depth + 1)) })
 }
+
+$ContextClassic = [bool] (Get-Command -Name Save-AzureRmProfile -ErrorAction SilentlyContinue) # returns TRUE if AzureRM.profile version 2.7 or older is loaded
+$ContextPath = [System.IO.Path]::ChangeExtension($PSCommandPath, '.ctx')
 
 $OptionalParameters = New-Object -TypeName Hashtable
 $TemplateFile = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($PSScriptRoot, $TemplateFile))
@@ -96,15 +100,62 @@ if ($UploadArtifacts) {
     }
 }
 
-if ($Reset -and (Get-AzureRmResourceGroup -Name $ResourceGroupName -Location $ResourceGroupLocation -ErrorAction SilentlyContinue)) {
+if (Get-AzureRmResourceGroup -Name $ResourceGroupName -Location $ResourceGroupLocation -ErrorAction SilentlyContinue) {
 
-    if ($Force) { Get-AzureRmResourceGroupDeployment -ResourceGroupName $ResourceGroupName | ? { $_.ProvisioningState -eq "Running" } | Stop-AzureRmResourceGroupDeployment | Out-Null }
+    if ($Clean -or $Force) { 
+    
+        try {
+            
+            if (Test-Path $ContextPath -PathType Leaf) { Remove-Item -Path $ContextPath -Force | Out-Null }
+            if ($ContextClassic) { Save-AzureRmProfile -Path $ContextPath } else { Save-AzureRmContext -Path $ContextPath -Force }
 
-    New-AzureRmResourceGroupDeployment -Name ('azurereset-' + ((Get-Date).ToUniversalTime()).ToString('MMdd-HHmm')) `
-                                       -ResourceGroupName $ResourceGroupName `
-                                       -TemplateUri "https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/100-blank-template/azuredeploy.json" `
-                                       -TemplateParameterUri "https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/100-blank-template/azuredeploy.parameters.json" `
-                                       -Force -Verbose -Mode Complete
+            Write-Output "Stopping running deployments on resource group '$ResourceGroupName' ..."
+
+            Get-AzureRmResourceGroupDeployment -ResourceGroupName $ResourceGroupName | ? { $_.ProvisioningState -eq "Running" } | % {
+                
+                Start-Job -ScriptBlock { param( $contextPath, $contextClassic, $resourceGroupName, $deploymentName ) if ($contextClassic) { Select-AzureRMProfile -Path $contextPath } else { Import-AzureRmContext -Path $contextPath } ; Stop-AzureRmResourceGroupDeployment -ResourceGroupName $resourceGroupName -Name $deploymentName | Out-Null } `
+                          -ArgumentList ($ContextPath, $ContextClassic, $ResourceGroupName, $_.DeploymentName) | Out-Null                
+            }
+
+            While (Get-Job -State Running) { Start-Sleep -Seconds 2 }
+        }
+        finally {
+            
+            if (Test-Path $ContextPath -PathType Leaf) { Remove-Item -Path $ContextPath -Force | Out-Null }
+        }
+    }
+
+    if ($Clean) { 
+
+        try {
+            
+            if (Test-Path $ContextPath -PathType Leaf) { Remove-Item -Path $ContextPath -Force | Out-Null }
+            if ($ContextClassic) { Save-AzureRmProfile -Path $ContextPath } else { Save-AzureRmContext -Path $ContextPath -Force }
+
+            Write-Output "Cleaning up deployment history of resource group '$ResourceGroupName' ..."
+
+            Get-AzureRmResourceGroupDeployment -ResourceGroupName $ResourceGroupName | ? { $_.ProvisioningState -ne "Running" } | % {
+                
+                Start-Job -ScriptBlock { param( $contextPath, $contextClassic, $resourceGroupName, $deploymentName ) if ($contextClassic) { Select-AzureRMProfile -Path $contextPath } else { Import-AzureRmContext -Path $contextPath } ; Remove-AzureRmResourceGroupDeployment -ResourceGroupName $resourceGroupName -Name $deploymentName | Out-Null } `
+                          -ArgumentList ($ContextPath, $ContextClassic, $ResourceGroupName, $_.DeploymentName) | Out-Null                
+            }
+
+            While (Get-Job -State Running) { Start-Sleep -Seconds 2 }
+        }
+        finally {
+            
+            if (Test-Path $ContextPath -PathType Leaf) { Remove-Item -Path $ContextPath -Force | Out-Null }
+        }
+    }
+
+    if ($Reset) {
+
+        New-AzureRmResourceGroupDeployment -Name ('azurereset-' + ((Get-Date).ToUniversalTime()).ToString('MMdd-HHmm')) `
+                                        -ResourceGroupName $ResourceGroupName `
+                                        -TemplateUri "https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/100-blank-template/azuredeploy.json" `
+                                        -TemplateParameterUri "https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/100-blank-template/azuredeploy.parameters.json" `
+                                        -Force -Verbose -Mode Complete
+    }
 }
 
 # Create or update the resource group using the specified template file and template parameters file
