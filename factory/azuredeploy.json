@@ -226,6 +226,9 @@
           "labSubnetName": {
             "value": "[variables('labSubnetName')]"
           },
+          "labSubnetPrefix": {
+            "value": "[variables('labSubnetPrefix')]"
+          },
           "labGatewayIP": {
             "value": "[variables('labGatewayIP')]"
           },

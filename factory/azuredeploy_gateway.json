@@ -32,6 +32,12 @@
         "description": "Name of the labs subnet."
       }
     },
+    "labSubnetPrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "Prefix of the labs subnet."
+      }
+    },
     "labGatewayIP": {
       "type": "string",
       "metadata": {
@@ -243,7 +249,7 @@
             ]
           },
           "protectedSettings": {
-            "commandToExecute": "[concat('bash azuredeploy_openvpn.sh ', parameters('adminPassword'), ' ', parameters('labGatewayPoolPrefix'))]"
+            "commandToExecute": "[concat('bash azuredeploy_openvpn.sh ', parameters('adminPassword'), ' ', parameters('labSubnetPrefix'), ' ', parameters('labGatewayPoolPrefix'))]"
           }
         }
       }
