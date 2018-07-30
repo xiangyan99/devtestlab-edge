@@ -16,6 +16,17 @@
             "type": "securestring",
             "displayName": "Password",
             "description": "New password for the user name"
+        },
+        "sshReset": {
+            "type": "bool",
+            "defaultValue": false,
+            "allowedValues": [
+                true,
+                false
+            ],
+            "metadata" : {
+                "description":"Whether or not reset the ssh."
+            }
         }
     },
     "runAzureVMExtension": {
@@ -23,12 +34,10 @@
         "type": "VMAccessForLinux",
         "typeHandlerVersion": "1.4",
         "autoUpgradeMinorVersion": true,
-        "settings": {
-            "UserName": "[parameters('userName')]"
-        },
         "protectedSettings": {
+            "username": "[parameters('userName')]",
             "password": "[parameters('password')]",
-            "reset_ssh": false
+            "reset_ssh": "[parameters('sshReset')]"
         }
     }
 }

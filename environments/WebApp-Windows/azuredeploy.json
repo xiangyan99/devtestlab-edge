@@ -129,5 +129,15 @@
                 }
             }
         }
-    ]
+    ],
+    "outputs": {
+        "appServiceName": {
+            "type": "string",
+            "value": "[variables('siteName')]"            
+        },
+        "defaultHostName": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Web/sites', variables('siteName')), '2015-02-01').defaultHostName]"
+        }
+    }
 }
